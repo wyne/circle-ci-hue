@@ -5,6 +5,10 @@
  *    -c {circle_token}
  *    -p {circle_project}
  *    -b {circle_branch}
+ *
+ *  Set tokens in a .env file like:
+ *    CIRCLE_API_TOKEN={token here}
+ *    HUE_USERNAME={hubot username}
  */
 
 var parseArgs = require('minimist')
@@ -18,8 +22,8 @@ var argv = parseArgs(process.argv.slice(2));
 var api = null;
 var lastBuildNum = null;
 
-var circle_token   = argv['c'];
-var hue_username   = argv['u'];
+var circle_token   = process.env.CIRCLE_API_TOKEN;
+var hue_username   = process.env.HUE_USERNAME;
 var circle_project = argv['p'];
 var circle_branch  = argv['b'];
 
