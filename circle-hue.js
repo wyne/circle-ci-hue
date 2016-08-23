@@ -1,14 +1,15 @@
 /*
- * Usage:
- *  node circle-hue.js [ -ucpb ]
- *    -u {hue_username}
- *    -c {circle_token}
- *    -p {circle_project}
- *    -b {circle_branch}
+ *  Usage:
+ *    node circle-hue.js [ -pb ]
+ *      -p {circle_project}
+ *      -b {circle_branch}
  *
  *  Set tokens in a .env file like:
  *    CIRCLE_API_TOKEN={token here}
  *    HUE_USERNAME={hubot username}
+ *
+ *  Example:
+ *    node circle-hue.js -p username/project -b master
  */
 
 var parseArgs = require('minimist')
@@ -20,25 +21,33 @@ dotenv.load();
 var argv = parseArgs(process.argv.slice(2));
 
 var api = null;
-var lastBuildNum = null;
+var lastBuild = {};
 
+/*
+ * Configuration
+ */
 var circle_token   = process.env.CIRCLE_API_TOKEN;
 var hue_username   = process.env.HUE_USERNAME;
 var circle_project = argv['p'];
-var circle_branch  = argv['b'];
+var circle_branch  = argv['b'] || 'master';
 
 var circle_base    = 'https://circleci.com/api/v1/project/';
 var circle_url     = circle_base + circle_project + '/tree/' + circle_branch + '?circle-token=' + circle_token + '&limit=1';
 
 var HueApi = hue.HueApi;
-var lightState = hue.lightState;
+var newOnState = function() {
+  return hue.lightState.create().on();
+}
 
-// Fail is red with ten flashes
-// Success is green with one flash
-// No change is decrement brightness of previous state
-var failState      = lightState.create().on().rgb(255, 0, 0).brightness(100).longAlert();
-var successState   = lightState.create().on().rgb(0, 100, 0).brightness(100).shortAlert();
-var unchangedState = lightState.create().on().bri_inc(-10);
+/*
+ * Light States
+ */
+var defaultBrightness     = 75;
+var failState             = newOnState().rgb(150,   0,   0).brightness(defaultBrightness).longAlert();  // Red, 10 flashes
+var successState          = newOnState().rgb(240, 192, 128).brightness(defaultBrightness).shortAlert(); // White, 1 flash
+var runningOnSuccessState = newOnState().rgb(  0,   0, 150);                              // Blue
+var runningOnFailState    = newOnState().rgb(242, 121,  53);                              // Orange
+var unchangedState        = newOnState().bri_inc(-10);
 
 var displayResult = function(result) {
   return console.log(JSON.stringify(result, null, 2));
@@ -65,15 +74,21 @@ var fetchBuildStatus = function() {
     var build = JSON.parse(body)[0];
     var buildNum = build.build_num;
 
-    console.log(buildNum + ": status=" + build.status + ", outcome=" + build.outcome + ", last=" + lastBuildNum);
+    console.log(buildNum + ": status=" + build.status + ", outcome=" + build.outcome + ", last=" + lastBuild.number);
 
-    if (buildNum == lastBuildNum) {
-      api.setLightState(1, unchangedState);
+    if (buildNum == lastBuild.number) {
       return;
     }
 
     if (build.status == "running") {
       api.setLightState(1, unchangedState);
+
+      if (lastBuild.outcome === "failed") {
+        api.setLightState(1, runningOnFailState);
+      } else {
+        api.setLightState(1, runningOnSuccessState);
+      }
+
       return;
     }
 
@@ -83,7 +98,8 @@ var fetchBuildStatus = function() {
       api.setLightState(1, successState).done();
     }
 
-    lastBuildNum = buildNum
+    lastBuild.number = buildNum
+    lastBuild.outcome = build.outcome
 
     return;
   });
