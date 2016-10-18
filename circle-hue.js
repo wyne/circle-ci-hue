@@ -71,7 +71,12 @@ var fetchBuildStatus = function() {
       'Accept': 'application/json'
     }
   }, function(error, response, body) {
-    var build = JSON.parse(body)[0];
+    var build;
+    try {
+      build = JSON.parse(body)[0];
+    } catch (err) {
+      console.log("Error! " + err.message);
+    }
     var buildNum = build.build_num;
 
     console.log(buildNum + ": status=" + build.status + ", outcome=" + build.outcome + ", last=" + lastBuild.number);
